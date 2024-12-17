@@ -149,10 +149,10 @@ def calculate_metrics_with_oe(ref, calculated, tolerance=5):
         (np.abs(calculated - ref / 2) <= ref_tolerance)
     )
     
-    error_half = np.abs(calculated - ref / 2)
-    # error_1x = np.abs(calculated - ref)
-    error_2x = np.abs(calculated - 2 * ref)
-    
+    hits_idx = np.where(np.abs(calculated - ref) <= ref_tolerance)[0]
+    hits_dbl_idx = np.where(np.abs(calculated - 2 * ref) <= ref_tolerance)[0]
+    hits_hf_idx = np.where(np.abs(calculated - ref / 2) <= ref_tolerance)[0]
+       
     scales = [1, 2, 0.5, 3, 1/3]
 
     # OE1: Overestimated BPM outside hierarchical relationships
@@ -175,7 +175,7 @@ def calculate_metrics_with_oe(ref, calculated, tolerance=5):
         "OE1": (oe1_count / total) * 100,
         "OE2": (oe2_count / total) * 100,
     }
-    return metrics
+    return metrics, hits_idx, hits_dbl_idx, hits_hf_idx
 
 
 # def calculate_metrics_with_oe(ref, calculated, tolerance=5):
