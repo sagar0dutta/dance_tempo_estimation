@@ -66,7 +66,7 @@ class DataHandler:
 
         section = section_data[section_idx]
         print("Total Sections:", len(section))
-        print("index 0 for first section")
+        # print("index 0 for first section")
         
         section_name, section_info = list(section.items())[0]
         section_onset_data = section_info["section_onset_data"]
@@ -76,7 +76,7 @@ class DataHandler:
         beat_ref = self.calculate_beat_onsets(cycle_onsets)
        
         bpm = self.calc_tempo_from_onsets(beat_ref[(beat_ref >= self.start_t) & (beat_ref <= self.end_t)])
-        print(f"{drum} tempo for the current section: {bpm:.2f} BPM")
+        # print(f"{drum} tempo for the current section: {bpm:.2f} BPM")
         
         return motion_data, self.drum_onsets, start_f, end_f, self.start_t, self.end_t, cycle_onsets, beat_ref, bpm
     
