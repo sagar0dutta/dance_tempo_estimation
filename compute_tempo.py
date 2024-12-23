@@ -6,13 +6,13 @@ from scipy.signal import savgol_filter, argrelmin
 
 def main_two_sensor(sensorA_velocity, sensorB_velocity, sensorA_position, sensorB_position,
                     mocap_fps, window_size, hop_size, tempi_range, 
-                    distance_threshold=0.015, T_filter= 0.25 ,absolute='yes'):
+                    distance_threshold=0.015, T_filter= 0.25,):
     # to used for any combincation of two sensors or two body markers
     
   
     # velocity smoothing
-    sensorA_abs_vel = smooth_velocity(sensorA_velocity, abs=absolute, window_length = 60, polyorder = 0) # size (n, 3)
-    sensorB_abs_vel = smooth_velocity(sensorB_velocity, abs=absolute, window_length = 60, polyorder = 0)   # size (n, 3)
+    sensorA_abs_vel = smooth_velocity(sensorA_velocity, abs='yes', window_length = 60, polyorder = 0) # size (n, 3)
+    sensorB_abs_vel = smooth_velocity(sensorB_velocity, abs='yes', window_length = 60, polyorder = 0)   # size (n, 3)
     novelty_length = len(sensorA_velocity)
     
     # Extract directional change onsets
@@ -24,18 +24,18 @@ def main_two_sensor(sensorA_velocity, sensorB_velocity, sensorA_position, sensor
     
     
     sensorA_sensorB_dir_change = sensorA_dir_change_f + sensorB_dir_change_f      # Merge axis wise
-    sensorA_sensorB_dir_change = np.where(sensorA_sensorB_dir_change > 0, 1,0)    # normalize onset values to 1
+    sensorA_sensorB_dir_change = np.where(sensorA_sensorB_dir_change > 0, 1,0)    # make onset values to 1
     both_sensor_onsets = filter_dir_onsets_by_threshold(sensorA_sensorB_dir_change, threshold_s= T_filter)   # Filter onsets axis wise 
     
     print("Computing tempograms...")
-    tempogram_ab1, tempogram_raw1, time_axis_seconds, tempo_axis_bpm = compute_tempogram(sensorA_abs_vel, mocap_fps, 
+    tempogram_ab, tempogram_raw, time_axis_seconds, tempo_axis_bpm = compute_tempogram(both_sensor_onsets, mocap_fps, 
                                                                 window_length=window_size, hop_size=hop_size, tempi=tempi_range)
     
-    tempogram_ab2, tempogram_raw2, time_axis_seconds2, tempo_axis_bpm2 = compute_tempogram(sensorB_abs_vel, mocap_fps, 
+    tempogram_ab2, tempogram_raw2, time_axis_seconds2, tempo_axis_bpm2 = compute_tempogram(both_sensor_onsets, mocap_fps, 
                                                                 window_length=window_size, hop_size=hop_size, tempi=tempi_range)
     
-    tempogram_ab =  [tempogram_ab1[0] + tempogram_ab2[0]]
-    tempogram_raw = [tempogram_raw1[0] + tempogram_raw2[0]]
+    # tempogram_ab =  [tempogram_ab1[0] + tempogram_ab2[0]]
+    # tempogram_raw = [tempogram_raw1[0] + tempogram_raw2[0]]
     
     
     print("Computing max method...")
@@ -95,7 +95,7 @@ def main_two_sensor_feet(sensorA_velocity_znorm, sensor_position,both_sensor_ons
         sensorA_position_ax = sensor_position[:, ax].reshape(-1,1)
         
         sensor_abs_vel = smooth_velocity(sensorA_velocity_ax, abs="yes", window_length = 60, polyorder = 0) # size (n, 3)
-        sensor_dir_change = velocity_based_novelty(sensor_abs_vel, distance_threshold=0.025, time_threshold=0, vel_threshold= 0.05)    # size (n, 3)
+        sensor_dir_change = velocity_based_novelty(sensor_abs_vel, distance_threshold=0.015, time_threshold=0, vel_threshold= 0.05)    # size (n, 3)
         sensor_dir_change_f = filter_velocity_by_position(sensorA_position_ax, sensor_dir_change)   # uni direction filter
         sensor_onset = filter_dir_onsets_by_threshold(sensor_dir_change_f, threshold_s= 0.25)
 
@@ -105,7 +105,7 @@ def main_two_sensor_feet(sensorA_velocity_znorm, sensor_position,both_sensor_ons
     elif mode == 'zero_bi':         # Extract bi-directional change onsets 
         sensorA_velocity_ax = sensorA_velocity_znorm[:, ax].reshape(-1,1)   
         sensor_abs_vel = smooth_velocity(sensorA_velocity_ax, abs="yes", window_length = 60, polyorder = 0) # size (n, 3)
-        sensor_dir_change = velocity_based_novelty(sensor_abs_vel, distance_threshold=0.025, time_threshold=0, vel_threshold= 0.05)    # size (n, 3)
+        sensor_dir_change = velocity_based_novelty(sensor_abs_vel, distance_threshold=0.015, time_threshold=0, vel_threshold= 0.05)    # size (n, 3)
         sensor_onset = filter_dir_onsets_by_threshold(sensor_dir_change, threshold_s= 0.25)
         
         # tempogram_ab, tempogram_raw, time_axis_seconds, tempo_axis_bpm = compute_tempogram(sensor_onsets, mocap_fps, 
@@ -236,7 +236,7 @@ def main_one_sensor_peraxis(sensor_velocity, sensor_position , mocap_fps, window
         sensor_abs_vel = smooth_velocity(sensor_velocity, abs="yes", window_length = 60, polyorder = 0) # size (n, 3)
         sensor_dir_change = velocity_based_novelty(sensor_abs_vel, distance_threshold=distance_threshold, time_threshold=time_threshold, vel_threshold= vel_thres)    # size (n, 3)
         sensor_dir_change_f = filter_velocity_by_position(sensor_position, sensor_dir_change)
-        sensor_onsets = filter_dir_onsets_by_threshold(sensor_dir_change, threshold_s= T_filter)
+        sensor_onsets = filter_dir_onsets_by_threshold(sensor_dir_change_f, threshold_s= T_filter)
         
         tempogram_ab, tempogram_raw, time_axis_seconds, tempo_axis_bpm = compute_tempogram(sensor_onsets, mocap_fps, 
                                                                     window_length=window_size, hop_size=hop_size, tempi=tempi_range)
@@ -266,6 +266,9 @@ def main_one_sensor_peraxis(sensor_velocity, sensor_position , mocap_fps, window
     
     tempo_data_weightedkernel = dance_beat_tempo_estimation_weightedkernelmethod(tempogram_ab, tempogram_raw, mocap_fps, 
                                                  novelty_length, window_size, hop_size, tempi_range)
+    
+    tempo_data_topN = dance_beat_tempo_estimation_topN(tempogram_ab, tempogram_raw, mocap_fps, 
+                                                   novelty_length, window_size, hop_size, tempi_range)
 
     json_tempodata = {
         "sensor_abs_vel": sensor_abs_vel,
@@ -280,6 +283,7 @@ def main_one_sensor_peraxis(sensor_velocity, sensor_position , mocap_fps, window
         
         "tempo_data_maxmethod": tempo_data_maxmethod,
         "tempo_data_weightedkernel": tempo_data_weightedkernel,
+        "tempo_data_topN": tempo_data_topN,
     }
     
     return json_tempodata
@@ -331,52 +335,6 @@ def main_1S_xyz(sensor_velocity, mocap_fps, window_size,
     
     return json_tempodata
 
-def main_1S_xy_yz_zx(sensor_velocity, sensor_position , mocap_fps, window_size, 
-                            hop_size, tempi_range, distance_threshold=0.015, time_threshold=0, 
-                            vel_thres = 0.05, T_filter=0.25, absolute='yes'):
-    # to used for any combincation of two sensors or two body markers
-        
-    # velocity smoothing
-    sensor_abs_vel = smooth_velocity(sensor_velocity, abs=absolute, window_length = 60, polyorder = 0) # size (n, 3)
-    # sensor_abs_vel = detrend_signal_array(sensor_abs_vel, cutoff= 0.5)
-    # sensor_abs_vel[sensor_abs_vel<0] = 0
-    novelty_length = len(sensor_velocity)
-
-    # Extract directional change onsets
-    sensor_dir_change = velocity_based_novelty(sensor_abs_vel, distance_threshold=distance_threshold, time_threshold=time_threshold, vel_threshold= vel_thres)    # size (n, 3)
-    sensor_dir_change_f = filter_velocity_by_position(sensor_position, sensor_dir_change)
-    sensor_onsets = filter_dir_onsets_by_threshold(sensor_dir_change_f, threshold_s= T_filter) 
-
-    tempogram_ab, tempogram_raw, time_axis_seconds, tempo_axis_bpm = compute_tempogram(sensor_abs_vel, mocap_fps, 
-                                                                     window_length=window_size, hop_size=hop_size, tempi=tempi_range)
-    
-    tempo_data_maxmethod = dance_beat_tempo_estimation_maxmethod(tempogram_ab, tempogram_raw, mocap_fps, 
-                                                   novelty_length, window_size, hop_size, tempi_range)
-    
-    tempo_data_weightedkernel = dance_beat_tempo_estimation_weightedkernelmethod(tempogram_ab, tempogram_raw, mocap_fps, 
-                                                 novelty_length, window_size, hop_size, tempi_range)
-    
-    # tempo_data_combinedtempogram = dance_beat_tempo_estimation_combinedtempogram_method([tempogram_ab[0]+tempogram_ab[1]+tempogram_ab[2]], 
-    #                                                                                 [tempogram_raw[0]+tempogram_raw[1]+tempogram_raw[2]], 
-    #                                                                                 mocap_fps, novelty_length, window_size, hop_size, tempi_range)
-    
-    json_tempodata = {
-        "sensor_abs_vel": sensor_abs_vel,
-        "sensor_dir_change_onsets": sensor_dir_change,
-        "sensor_dir_change_onsets_f": sensor_dir_change_f,
-        "sensor_onsets": sensor_onsets,
-
-        "tempogram_ab": tempogram_ab,
-        "tempogram_raw": tempogram_raw,
-        "time_axis_seconds": time_axis_seconds,
-        "tempo_axis_bpm": tempo_axis_bpm,
-        
-        "tempo_data_maxmethod": tempo_data_maxmethod,
-        "tempo_data_weightedkernel": tempo_data_weightedkernel,
-        # "tempo_data_combinedtempogram": tempo_data_combinedtempogram
-    }
-    
-    return json_tempodata  
 
 def get_zero_onsets(sensor_velocity, sensor_position, 
                     distance_threshold=0.1, tcut =0.25, vel_thres = 0.05,):
@@ -584,12 +542,14 @@ def dance_beat_tempo_estimation_maxmethod(tempogram_ab, tempogram_raw, sampling_
     tempo_curve = np.zeros(padded_curve_length)
     tempo_curve_taxis = np.linspace(0, novelty_length/240, novelty_length)
     prev_freq = None
-    peak_list = []
+    mag_list = []
+    phase_list = []
     bpm_list = []
     for frame_idx in range(num_frames):
         
         bpm_arr = np.array([])
         freq_arr = np.array([])
+        mag_arr = np.array([])
         phase_arr = np.array([])
         
         for i in range(len(tempogram_ab)):  # number of axis = 3 
@@ -611,15 +571,17 @@ def dance_beat_tempo_estimation_maxmethod(tempogram_ab, tempogram_raw, sampling_
             
             freq_arr = np.concatenate(( freq_arr, np.array([frequency]) ))
             bpm_arr = np.concatenate(( bpm_arr, np.array([peak_tempo_bpm]) ))
+            mag_arr = np.concatenate(( mag_arr, np.array([magnitude]) ))
             phase_arr = np.concatenate(( phase_arr, np.array([phase]) ))
         
         f_idx = np.argmax(freq_arr)
         selected_freq = freq_arr[f_idx]
         selected_bpm = bpm_arr[f_idx]
+        selected_mag = mag_arr[f_idx]
         selected_phase = phase_arr[f_idx]
         
-        peak_list.append(selected_freq)
-        bpm_list.append(selected_bpm)
+        mag_list.append(selected_mag)
+        bpm_list.append(selected_bpm)   # bpm per window
         
         ################################################
         # margin_bpm = 10        # Small margin for double and half checks (e.g., ±5%)
@@ -643,7 +605,7 @@ def dance_beat_tempo_estimation_maxmethod(tempogram_ab, tempogram_raw, sampling_
         # prev_freq = selected_freq       # Update previous frequency to the current value
         ######################################################
         
-        tempo_curve[time_kernel] = selected_bpm
+        # tempo_curve[time_kernel] = selected_bpm
         sinusoidal_kernel = hann_window * np.cos(2 * np.pi * (time_kernel * selected_freq - selected_phase))
         estimated_beat_pulse[time_kernel] += sinusoidal_kernel
 
@@ -657,16 +619,112 @@ def dance_beat_tempo_estimation_maxmethod(tempogram_ab, tempogram_raw, sampling_
                  "tempo_curve": tempo_curve,
                  "tempo_curve_time_axis": tempo_curve_taxis,
                 #  "global_tempo_bpm": global_bpm,
-                 "peak_arr": np.array(peak_list),
+                 "mag_arr": np.array(mag_list),
                  "bpm_arr": np.array(bpm_list),}
 
     return json_data
 
+def dance_beat_tempo_estimation_topN(tempogram_ab, tempogram_raw, sampling_rate, novelty_length, window_length, hop_size, tempi):
+    """Compute windowed sinusoid with optimal phase
+
+
+    Args:
+        tempogram (np.ndarray): Fourier-based (complex-valued) tempogram
+        sampling_rate (scalar): Sampling rate
+        novelty_length (int): Length of novelty curve
+        window_length (int): Window length
+        hop_size (int): Hop size
+        tempi (np.ndarray): Set of tempi (given in BPM)
+
+    Returns:
+        beat
+    """
+
+    hann_window = np.hanning(window_length)
+    half_window_length = window_length // 2
+    left_padding = half_window_length
+    right_padding = half_window_length
+    padded_curve_length = novelty_length + left_padding + right_padding
+    estimated_beat_pulse = np.zeros(padded_curve_length)
+    num_frames = tempogram_raw[0].shape[1]
+
+    tempo_curve = np.zeros(padded_curve_length)
+    tempo_curve_taxis = np.linspace(0, novelty_length/240, novelty_length)
+
+
+    freq_all_frames = []
+    bpm_all_frames = []
+    for frame_idx in range(num_frames):
+        
+        
+        freq_arr_axes = []
+        bpm_arr_axes = []
+        for i in range(len(tempogram_ab)):  # number of axis = 3 
+        
+            n = 10  # Number of top peaks you want
+            peak_tempo_indices = np.argsort(tempogram_ab[i][:, frame_idx])[-n:]  # Indices of top n values, sorted in ascending order
+            peak_tempo_indices = peak_tempo_indices[::-1]  # Reverse to get them in descending order
+            
+            top_n_freq_arr = np.array([])
+            top_n_bpm_arr = np.array([])
+            for idx in peak_tempo_indices:  # Iterate over the top n indices
+                peak_tempo_bpm = tempi[idx]
+                frequency = (peak_tempo_bpm / 60) / sampling_rate
+                peak_frequency = np.round(frequency, 3)
+            
+                # Get the complex value for that peak frequency and time window
+                complex_value = tempogram_raw[i][idx, frame_idx]
+                magnitude = np.abs(complex_value)
+                phase = - np.angle(complex_value) / (2 * np.pi)
+            
+                start_index = frame_idx * hop_size
+                end_index = start_index + window_length
+                time_kernel = np.arange(start_index, end_index)
+                
+                top_n_bpm_arr = np.concatenate(( top_n_bpm_arr, np.array([peak_tempo_bpm]) ))
+                top_n_freq_arr = np.concatenate(( top_n_freq_arr, np.array([peak_frequency]) ))
+                
+            freq_arr_axes.append(top_n_freq_arr)
+            bpm_arr_axes.append(top_n_bpm_arr) # list of array of top n bpm array for the three axes
+        
+        
+            
+        freq_all_frames.append(np.column_stack(freq_arr_axes))
+        bpm_all_frames.append(np.column_stack(bpm_arr_axes))
+        
+        frame_bpm = np.column_stack(bpm_arr_axes)
+        top_n_max_bpm = np.argmax(frame_bpm, axis=0)        # 1d array
+
+        # Calculate the weighted BPM and frequency for the top n values
+        top_n_bpm = frame_bpm.flatten()  # Flatten the array for easy manipulation
+        top_n_freq = np.array([bpm / 60 / sampling_rate for bpm in top_n_bpm])
+        top_n_magnitudes = np.abs(tempogram_raw[i][peak_tempo_indices, frame_idx])  # Corresponding magnitudes
+
+        if np.sum(top_n_magnitudes) > 0:
+            # Weighted BPM and frequency
+            weighted_bpm = np.sum(top_n_bpm * top_n_magnitudes) / np.sum(top_n_magnitudes)
+            weighted_freq = np.sum(top_n_freq * top_n_magnitudes) / np.sum(top_n_magnitudes)
+        else:
+            weighted_bpm = 0
+            weighted_freq = 0
+
+        # Use the weighted BPM and frequency for tempo curve and sinusoidal kernel
+        selected_bpm = weighted_bpm
+        selected_freq = weighted_freq
+
+        tempo_curve[time_kernel] = selected_bpm
+        sinusoidal_kernel = hann_window * np.cos(2 * np.pi * (time_kernel * selected_freq - phase))
+        estimated_beat_pulse[time_kernel] += sinusoidal_kernel
+
+    json_data = {"estimated_beat_pulse": estimated_beat_pulse,
+                 "tempo_curve": tempo_curve,
+                 "tempo_curve_time_axis": tempo_curve_taxis,
+                 "bpm_arr": bpm_all_frames,}
+
+    return json_data
 
 def dance_beat_tempo_estimation_weightedkernelmethod(tempogram_ab, tempogram_raw, sampling_rate, novelty_length, window_length, hop_size, tempi):
     """Overlapping kernels from all axis per frame
-
-
     Args:
         tempogram (np.ndarray): Fourier-based (complex-valued) tempogram
         sampling_rate (scalar): Sampling rate
@@ -727,8 +785,11 @@ def dance_beat_tempo_estimation_weightedkernelmethod(tempogram_ab, tempogram_raw
 
         if len(bpm_arr) > 0:
             # selected_bpm = np.max(bpm_arr)          # mean median not good, max is good
-            selected_bpm = np.sum(bpm_arr * magnitude_arr) / np.sum(magnitude_arr)
-            tempo_curve[time_kernel] = selected_bpm
+            if np.sum(magnitude_arr) == 0:
+                selected_bpm = 0
+            else:
+                selected_bpm = np.sum(bpm_arr * magnitude_arr) / np.sum(magnitude_arr)
+                tempo_curve[time_kernel] = selected_bpm
         else:
             selected_bpm = 0
         bpm_list.append(selected_bpm)
