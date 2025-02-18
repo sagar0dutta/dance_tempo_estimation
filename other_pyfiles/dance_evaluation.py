@@ -128,106 +128,53 @@ def evaluate_dance_onsets_with_half_beats(drum_onsets, dance_onsets, tolerance=0
 
 def calculate_metrics_with_oe(ref, calculated, tolerance=5):
     """
-    Calculate Acc1, Acc2, Metric3, OE1, and OE2.
+    Calculate Acc1, Acc2, OE1, OE2, AOE1, and AOE2 metrics.
+
     Args:
         ref (np.ndarray): Reference BPMs.
         calculated (np.ndarray): Estimated BPMs.
-        tolerance (float): Precision window (default 4%).
-    Returns:
-        dict: Dictionary with Acc1, Acc2, Metric3, OE1, and OE2 values.
-    """
-    # ref_tolerance = ref * tolerance
-    ref_tolerance = tolerance
-    
-    # Acc1: Within 4% of reference BPM
-    acc1_count = np.sum(np.abs(calculated - ref) <= ref_tolerance)
-    
-    # Acc2: Within 4% of reference BPM, double, or half
-    acc2_count = np.sum(
-        (np.abs(calculated - ref) <= ref_tolerance) |
-        (np.abs(calculated - 2 * ref) <= ref_tolerance) |
-        (np.abs(calculated - ref / 2) <= ref_tolerance)
-    )
-    scales = [1, 2, 0.5, 3, 1/3]
-    acc3_count = np.sum(np.any([np.abs(calculated - ref * scale) <= ref_tolerance for scale in scales], axis=0))
+        tolerance (float): Precision window (default 5 BPM).
 
-    hits_idx = np.where(np.abs(calculated - ref) <= ref_tolerance)[0]
-    hits_dbl_idx = np.where(np.abs(calculated - 2 * ref) <= ref_tolerance)[0]
-    hits_hf_idx = np.where(np.abs(calculated - ref / 2) <= ref_tolerance)[0]
+    Returns:
+        dict: Dictionary with Acc1, Acc2, OE1, OE2, AOE1, and AOE2 values.
+    """
+    ref = np.array(ref)
+    calculated = np.array(calculated)
+    scales = [1, 2, 0.5, 3, 1/3]  # Scales for hierarchical relationships
     
-    # OE1: Overestimated BPM outside hierarchical relationships
-    oe1_count = np.sum(
-        (calculated > ref) &  # Overestimation
-        ~np.any([np.abs(calculated - ref * scale) <= ref_tolerance for scale in scales], axis=0)  # Not within any scale
+    # Ensure matching lengths
+    assert len(ref) == len(calculated), "Reference and calculated arrays must have the same length."
+    
+    # 1. Acc1: Within tolerance of reference BPM
+    acc1_count = np.sum(np.abs(calculated - ref) <= tolerance)
+    
+    # 2. Acc2: Within tolerance of reference BPM, double, or half
+    acc2_count = np.sum(
+        (np.abs(calculated - ref) <= tolerance) |
+        (np.abs(calculated - 2 * ref) <= tolerance) |
+        (np.abs(calculated - ref / 2) <= tolerance)
     )
     
-    # OE2: Overestimated BPM within hierarchical relationships
-    oe2_count = np.sum(
-        (calculated > ref) &  # Overestimation
-        np.any([np.abs(calculated - ref * scale) <= ref_tolerance for scale in scales], axis=0)  # Within any scale
-    )
+    # 3. OE1: Octave error (log2 of ratio)
+    oe1 = np.log2(calculated / ref)
     
+    # 4. OE2: Min absolute octave error across scales
+    all_scaled_errors = [np.log2(scale * calculated / ref) for scale in scales]
+    oe2 = np.min(np.abs(all_scaled_errors), axis=0)  # Smallest absolute error across scales
+
+    # 5. Absolute OE metrics
+    aoe1 = np.abs(oe1)  # Absolute OE1
+    aoe2 = np.abs(oe2)  # Absolute OE2
+
+    # Normalize metrics for percentage
     total = len(ref)
     
     metrics = {
-        "acc1": (acc1_count / total) * 100,
-        "acc2": (acc2_count / total) * 100,     # double/ half
-        "acc3": (acc3_count / total) * 100,     # 1x 2x 3x 0.5x 0.33x
-        "OE1": (oe1_count / total) * 100,
-        "OE2": (oe2_count / total) * 100,
+        "Acc1": (acc1_count / total) * 100,
+        "Acc2": (acc2_count / total) * 100,
+        "OE1": oe1,
+        "OE2": oe2,
+        "AOE1": np.mean(aoe1),  # Mean absolute OE1
+        "AOE2": np.mean(aoe2)   # Mean absolute OE2
     }
-    return metrics, hits_idx, hits_dbl_idx, hits_hf_idx
-
-
-# def calculate_metrics_with_oe(ref, calculated, tolerance=5):
-#     """
-#     Calculate Acc1, Acc2, OE1, OE2, AOE1, and AOE2 metrics.
-
-#     Args:
-#         ref (np.ndarray): Reference BPMs.
-#         calculated (np.ndarray): Estimated BPMs.
-#         tolerance (float): Precision window (default 5 BPM).
-
-#     Returns:
-#         dict: Dictionary with Acc1, Acc2, OE1, OE2, AOE1, and AOE2 values.
-#     """
-#     ref = np.array(ref)
-#     calculated = np.array(calculated)
-#     scales = [1, 2, 0.5, 3, 1/3]  # Scales for hierarchical relationships
-    
-#     # Ensure matching lengths
-#     assert len(ref) == len(calculated), "Reference and calculated arrays must have the same length."
-    
-#     # 1. Acc1: Within tolerance of reference BPM
-#     acc1_count = np.sum(np.abs(calculated - ref) <= tolerance)
-    
-#     # 2. Acc2: Within tolerance of reference BPM, double, or half
-#     acc2_count = np.sum(
-#         (np.abs(calculated - ref) <= tolerance) |
-#         (np.abs(calculated - 2 * ref) <= tolerance) |
-#         (np.abs(calculated - ref / 2) <= tolerance)
-#     )
-    
-#     # 3. OE1: Octave error (log2 of ratio)
-#     oe1 = np.log2(calculated / ref)
-    
-#     # 4. OE2: Min absolute octave error across scales
-#     all_scaled_errors = [np.log2(scale * calculated / ref) for scale in scales]
-#     oe2 = np.min(np.abs(all_scaled_errors), axis=0)  # Smallest absolute error across scales
-
-#     # 5. Absolute OE metrics
-#     aoe1 = np.abs(oe1)  # Absolute OE1
-#     aoe2 = np.abs(oe2)  # Absolute OE2
-
-#     # Normalize metrics for percentage
-#     total = len(ref)
-    
-#     metrics = {
-#         "Acc1": (acc1_count / total) * 100,
-#         "Acc2": (acc2_count / total) * 100,
-#         "OE1": oe1,
-#         "OE2": oe2,
-#         "AOE1": np.mean(aoe1),  # Mean absolute OE1
-#         "AOE2": np.mean(aoe2)   # Mean absolute OE2
-#     }
-#     return metrics
+    return metrics
